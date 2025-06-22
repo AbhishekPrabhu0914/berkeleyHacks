@@ -1,0 +1,119 @@
+/* Main application layout with responsive design */
+.appContainer {
+  display: flex;
+  height: 100vh;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+}
+
+.chatSection {
+  flex: 1;
+  min-width: 0; /* Prevents flex item from overflowing */
+}
+
+.previewSection {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Authentication screen styles */
+.authContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+}
+
+.authCard {
+  width: 100%;
+  max-width: 400px;
+  padding: 2rem;
+}
+
+.authContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.5rem;
+}
+
+.logoContainer {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(6, 182, 212, 0.3);
+}
+
+.authLogo {
+  width: 40px;
+  height: 40px;
+}
+
+.authTitle {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.authDescription {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+/* Responsive design for mobile devices */
+@media (max-width: 768px) {
+  .appContainer {
+    flex-direction: column;
+  }
+
+  .chatSection,
+  .previewSection {
+    flex: none;
+    height: 50vh;
+  }
+
+  .authCard {
+    padding: 1.5rem;
+  }
+
+  .authTitle {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .authContainer {
+    padding: 0.5rem;
+  }
+
+  .authCard {
+    padding: 1rem;
+  }
+
+  .logoContainer {
+    width: 60px;
+    height: 60px;
+  }
+
+  .authLogo {
+    width: 30px;
+    height: 30px;
+  }
+
+  .authTitle {
+    font-size: 1.5rem;
+  }
+}
