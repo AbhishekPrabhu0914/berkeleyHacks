@@ -62,7 +62,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <img src="/favicon.ico" alt="Logo" className={styles.logo} />
             </div>
             <div>
-              <h2 className={styles.title}>AI Chat Studio</h2>
+              <h2 className={styles.title}>Twinstack</h2>
               <p className={styles.subtitle}>{userName}</p>
             </div>
           </div>

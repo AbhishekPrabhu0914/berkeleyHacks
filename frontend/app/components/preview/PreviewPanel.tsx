@@ -4,12 +4,15 @@ import type React from "react"
 import { Card } from "../ui/Card"
 import { Button } from "../ui/Button"
 import styles from "./PreviewPanel.module.css"
+import { Dispatch, SetStateAction } from "react"
 
-interface PreviewPanelProps {
-  generatedCode: string | null
-  currentView: "chat" | "code"
-  onViewChange: (view: "chat" | "code") => void
-  onGenerateCode: () => void
+export interface PreviewPanelProps {
+  generatedCode: string | null;
+  currentView: "chat" | "code";
+  onViewChange: Dispatch<SetStateAction<"chat" | "code">>;
+  onGenerateCode: () => void;
+  pmFeedback: string | null; // Added pmFeedback property
+  onDownloadClick: () => Promise<void>;
 }
 
 /**

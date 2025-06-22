@@ -2,11 +2,11 @@
 
 import type React from "react"
 import { useRef, useEffect } from "react"
-import { Card } from "../ui/Card"
-import { Button } from "../ui/Button"
-import { Input } from "../ui/Input"
 import { MessageCard } from "./MessageCard"
 import styles from "./ChatPanel.module.css"
+import { Button } from "../ui/Button"
+import { Card } from "../ui/Card"
+import { Input } from "../ui/Input"
 
 interface Message {
   id: string
@@ -55,14 +55,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   return (
     <div className={styles.chatPanel}>
       {/* Header with user info and sign out */}
-      <Card variant="elevated" className={styles.header}>
+      <Card className={styles.header}>
         <div className={styles.headerContent}>
           <div className={styles.userInfo}>
             <div className={styles.avatar}>
               <img src="/favicon.ico" alt="Logo" className={styles.logo} />
             </div>
             <div>
-              <h2 className={styles.title}>AI Chat Studio</h2>
+              <h2 className={styles.title}>TwinStack</h2>
               <p className={styles.subtitle}>{userName}</p>
             </div>
           </div>
@@ -72,20 +72,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       </Card>
 
-      {/* Action buttons for quick interactions */}
-      <Card variant="default" className={styles.actionsCard}>
-        <div className={styles.actions}>
-          <Button variant="accent" size="sm" onClick={() => onActionClick("idea")}>
-            ✨ Generate Idea
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => onActionClick("refine")}>
-            🔄 Refine Thought
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => onActionClick("example")}>
-            💻 Give Example
-          </Button>
-        </div>
-      </Card>
 
       {/* Messages area with scroll */}
       <div className={styles.messagesContainer}>
@@ -111,18 +97,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       </div>
 
       {/* Input area */}
-      <Card variant="elevated" className={styles.inputCard}>
+      <Card className={styles.inputCard}>
         <div className={styles.inputContainer}>
           <Input
             value={currentMessage}
-            onChange={onMessageChange}
+            onChange={(e) => onMessageChange(e.target.value)}
             placeholder="Describe what you want to build..."
-            multiline
-            rows={1}
             className={styles.messageInput}
           />
           <Button
-            variant="accent"
+            variant="default"
             onClick={onSendMessage}
             disabled={!currentMessage.trim()}
             className={styles.sendButton}

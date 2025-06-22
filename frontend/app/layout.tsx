@@ -6,8 +6,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AI Chat Studio",
-  description: "Professional AI-powered chat interface for code generation",
+  title: "TwinStack",
+  description: "From idea to app in minutes -- TwinStack pairs a product-minded agent with a coding expert to turn natural language into working mobile code.",
     generator: 'v0.dev'
 }
 

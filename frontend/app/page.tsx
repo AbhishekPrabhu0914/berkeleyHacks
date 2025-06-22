@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { Button } from "./components/ui/Button"
 import { Card } from "./components/ui/Card"
@@ -26,51 +26,33 @@ export default function Home() {
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const [generatedCode, setGeneratedCode] = useState<string | null>(null)
+  const [pmReply, setPmReply] = useState<string | null>(null)
   const [view, setView] = useState<"chat" | "code">("chat")
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    authenticateUser()
-    const setupSubscription = async () => {
-      const cleanup = await initializeMessageSubscription()
-      return cleanup
-    }
-    let cleanup: (() => void) | undefined;
-    setupSubscription().then((fn) => {
-      cleanup = fn;
-    });
-    return () => cleanup?.();
-  }, [])
-
-  const authenticateUser = async () => {
-    const { data } = await supabase.auth.getUser()
-    if (data.user) {
-      const { id, email, user_metadata } = data.user
-      setUser({
-        id,
-        email: email!,
-        full_name: user_metadata.full_name,
-        avatar_url: user_metadata.avatar_url,
-      })
-    }
-  }
-
-  const initializeMessageSubscription = async (): Promise<() => void> => {
-    const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: true })
-    setMessages(data || [])
-
-    const channel = supabase.channel("public:messages").on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages" },
-      (payload) => {
-        const newMsg = payload.new as Message
-        setMessages((prev) => [...prev, newMsg])
+    const init = async () => {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        const { id, email, user_metadata } = data.user
+        setUser({
+          id,
+          email: email!,
+          full_name: user_metadata.full_name,
+          avatar_url: user_metadata.avatar_url,
+        })
       }
-    )
 
-    await channel.subscribe()
-    return () => supabase.removeChannel(channel)
-  }
+      const { data: initialMessages } = await supabase
+        .from("messages")
+        .select("*")
+        .order("created_at", { ascending: true })
+
+      setMessages(initialMessages || [])
+    }
+
+    init()
+  }, [])
 
   const handleSignIn = async () => {
     await supabase.auth.signInWithOAuth({ provider: "google" })
@@ -105,12 +87,7 @@ export default function Home() {
 
       const data = await res.json()
 
-      if (data.generated_code) {
-        setGeneratedCode(data.generated_code)
-        setView("code")
-      }
-
-      if (data.reply) {
+      if (data.reply && data.missing_sections) {
         const botMsg: Message = {
           id: crypto.randomUUID(),
           text: data.reply,
@@ -118,51 +95,40 @@ export default function Home() {
           created_at: new Date().toISOString(),
         }
         setMessages((prev) => [...prev, botMsg])
-
         await supabase.from("messages").insert([
           { text: trimmed, sender: "user" },
           { text: data.reply, sender: "bot" },
         ])
+      } else {
+        setPmReply(data.pm_reply)
+        setGeneratedCode(data.generated_code)
+        setView("code")
       }
-    } catch (error) {
-      console.error("Send message failed:", error)
+    } catch (err) {
+      console.error("Send failed:", err)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleIterate = async (type: string) => {
-    setIsLoading(true)
-
+  const handleDownloadZip = async () => {
+    if (!generatedCode) return
     try {
-      const res = await fetch("http://localhost:5001/iterate", {
+      const res = await fetch("http://localhost:5001/download-zip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ code: generatedCode }),
       })
 
-      const data = await res.json()
-
-      if (data.generated_code) {
-        setGeneratedCode(data.generated_code)
-        setView("code")
-      }
-
-      const textOnly = data.pm_reply || data.swe_reply
-      if (textOnly && !data.generated_code) {
-        const botMsg: Message = {
-          id: crypto.randomUUID(),
-          text: textOnly,
-          sender: "bot",
-          created_at: new Date().toISOString(),
-        }
-        setMessages((prev) => [...prev, botMsg])
-        await supabase.from("messages").insert([{ text: textOnly, sender: "bot" }])
-      }
-    } catch (error) {
-      console.error("Iteration failed:", error)
-    } finally {
-      setIsLoading(false)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "project.zip"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Download failed:", err)
     }
   }
 
@@ -171,16 +137,12 @@ export default function Home() {
       <div className={styles.authContainer}>
         <Card variant="elevated" className={styles.authCard}>
           <div className={styles.authContent}>
-            <div className={styles.logoContainer}>
-              <img src="/favicon.ico" alt="Logo" className={styles.authLogo} />
-            </div>
-            <h1 className={styles.authTitle}>AI Chat Studio</h1>
+            <img src="/favicon.ico" alt="Logo" className={styles.authLogo} />
+            <h1 className={styles.authTitle}>TwinStack</h1>
             <p className={styles.authDescription}>
-              Professional AI-powered interface for code generation and creative assistance
+              Start building your AI-powered app ideas
             </p>
-            <Button variant="accent" size="lg" onClick={handleSignIn}>
-              Continue with Google
-            </Button>
+            <Button onClick={handleSignIn}>Continue with Google</Button>
           </div>
         </Card>
       </div>
@@ -192,7 +154,7 @@ export default function Home() {
       {isLoading && (
         <div className={styles.loadingOverlay}>
           <div className={styles.loadingSpinner}></div>
-          <p className={styles.loadingText}>TwinStack is thinking...</p>
+          <p className={styles.loadingText}>Generating code...</p>
         </div>
       )}
       <div className={styles.chatSection}>
@@ -201,7 +163,7 @@ export default function Home() {
           currentMessage={message}
           onMessageChange={setMessage}
           onSendMessage={handleSendMessage}
-          onActionClick={handleIterate}
+          onActionClick={() => {}}
           userName={user.full_name}
           onSignOut={handleSignOut}
         />
@@ -211,7 +173,9 @@ export default function Home() {
           generatedCode={generatedCode}
           currentView={view}
           onViewChange={setView}
-          onGenerateCode={() => handleIterate("example")}
+          onGenerateCode={() => {}}
+          pmFeedback={pmReply}
+          onDownloadClick={handleDownloadZip}
         />
       </div>
     </div>
