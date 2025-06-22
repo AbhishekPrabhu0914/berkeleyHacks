@@ -25,32 +25,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   return (
     <div className={styles.previewPanel}>
       {/* Header with view toggle */}
-      <Card variant="elevated" className={styles.header}>
-        <div className={styles.headerContent}>
-          <div className={styles.titleSection}>
-            <div className={styles.icon}>
-              <span>{"</>"}</span>
-            </div>
-            <h2 className={styles.title}>Preview</h2>
-          </div>
-          <div className={styles.viewToggle}>
-            <Button
-              variant={currentView === "chat" ? "accent" : "ghost"}
-              size="sm"
-              onClick={() => onViewChange("chat")}
-            >
-              Chat
-            </Button>
-            <Button
-              variant={currentView === "code" ? "accent" : "ghost"}
-              size="sm"
-              onClick={() => onViewChange("code")}
-            >
-              Code
-            </Button>
-          </div>
-        </div>
-      </Card>
+    
 
       {/* Content area */}
       <div className={styles.content}>
@@ -58,7 +33,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           <Card variant="bordered" className={styles.codeCard}>
             <div className={styles.codeHeader}>
               <div className={styles.windowControls}>
-                <div className={styles.control} style={{ background: "#ef4444" }} />
+                         <div className={styles.control} style={{ background: "#ef4444" }} />
                 <div className={styles.control} style={{ background: "#f59e0b" }} />
                 <div className={styles.control} style={{ background: "#10b981" }} />
               </div>

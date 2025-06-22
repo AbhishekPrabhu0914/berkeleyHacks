@@ -72,20 +72,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       </Card>
 
-      {/* Action buttons for quick interactions */}
-      <Card variant="default" className={styles.actionsCard}>
-        <div className={styles.actions}>
-          <Button variant="accent" size="sm" onClick={() => onActionClick("idea")}>
-            ✨ Generate Idea
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => onActionClick("refine")}>
-            🔄 Refine Thought
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => onActionClick("example")}>
-            💻 Give Example
-          </Button>
-        </div>
-      </Card>
 
       {/* Messages area with scroll */}
       <div className={styles.messagesContainer}>
