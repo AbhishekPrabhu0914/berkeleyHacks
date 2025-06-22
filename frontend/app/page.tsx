@@ -9,17 +9,17 @@ import { PreviewPanel } from "./components/preview/PreviewPanel"
 import type { User } from "./types/User"
 import styles from "./page.module.css"
 
-const supabase = createClient(
-  "https://suqfupehkzxtpqqghpaq.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cWZ1cGVoa3p4dHBxcWdocGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1MzY3NjcsImV4cCI6MjA2NjExMjc2N30.Vt3iK170uwYfI7PwlA17S8lvhrcSCiuXpQVEo2XE2Z4"
-)
-
 interface Message {
   id: string
   text: string
   sender: "user" | "bot"
   created_at: string
 }
+
+const supabase = createClient(
+  'https://suqfupehkzxtpqqghpaq.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cWZ1cGVoa3p4dHBxcWdocGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1MzY3NjcsImV4cCI6MjA2NjExMjc2N30.Vt3iK170uwYfI7PwlA17S8lvhrcSCiuXpQVEo2XE2Z4'
+);
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
@@ -30,52 +30,47 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (data.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: data.user.user_metadata.full_name,
-          avatar_url: data.user.user_metadata.avatar_url,
-        })
-      }
+    authenticateUser()
+    const setupSubscription = async () => {
+      const cleanup = await initializeMessageSubscription()
+      return cleanup
     }
-
-    const setupMessages = async () => {
-      const { data } = await supabase
-        .from("messages")
-        .select("*")
-        .order("created_at", { ascending: true })
-      setMessages(data || [])
-
-      const channel = supabase
-        .channel("public:messages")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages" },
-          (payload) => {
-            const newMsg = payload.new as Message
-            setMessages((prev) => [...prev, newMsg])
-          }
-        )
-
-      await channel.subscribe()
-      return () => {
-        supabase.removeChannel(channel)
-      }
-    }
-
-    getUser()
-    let cleanupFn: (() => void) | undefined
-    setupMessages().then((cleanup) => {
-      cleanupFn = cleanup
-    })
-
-    return () => {
-      if (cleanupFn) cleanupFn()
-    }
+    let cleanup: (() => void) | undefined;
+    setupSubscription().then((fn) => {
+      cleanup = fn;
+    });
+    return () => cleanup?.();
   }, [])
+
+  const authenticateUser = async () => {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) {
+      const { id, email, user_metadata } = data.user
+      setUser({
+        id,
+        email: email!,
+        full_name: user_metadata.full_name,
+        avatar_url: user_metadata.avatar_url,
+      })
+    }
+  }
+
+  const initializeMessageSubscription = async (): Promise<() => void> => {
+    const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: true })
+    setMessages(data || [])
+
+    const channel = supabase.channel("public:messages").on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      (payload) => {
+        const newMsg = payload.new as Message
+        setMessages((prev) => [...prev, newMsg])
+      }
+    )
+
+    await channel.subscribe()
+    return () => supabase.removeChannel(channel)
+  }
 
   const handleSignIn = async () => {
     await supabase.auth.signInWithOAuth({ provider: "google" })
@@ -84,38 +79,6 @@ export default function Home() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
-  }
-
-  const handleIterate = async (type: string) => {
-    setIsLoading(true)
-    try {
-      const res = await fetch("http://localhost:5001/iterate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
-      })
-      const data = await res.json()
-      const reply = data.swe_reply || data.reply || `No reply for ${type}`
-
-      const botMsg: Message = {
-        id: crypto.randomUUID(),
-        text: reply,
-        sender: "bot",
-        created_at: new Date().toISOString(),
-      }
-
-      setMessages((prev) => [...prev, botMsg])
-      if (type === "example" || type === "code") {
-        setGeneratedCode(reply)
-        setView("code")
-      }
-
-      await supabase.from("messages").insert([{ text: reply, sender: "bot" }])
-    } catch (err) {
-      console.error("Iterate failed:", err)
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   const handleSendMessage = async () => {
@@ -139,23 +102,65 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
       })
-      const data = await res.json()
-      const reply = data.reply || "No reply"
 
-      const botMsg: Message = {
-        id: crypto.randomUUID(),
-        text: reply,
-        sender: "bot",
-        created_at: new Date().toISOString(),
+      const data = await res.json()
+
+      if (data.generated_code) {
+        setGeneratedCode(data.generated_code)
+        setView("code")
       }
 
-      setMessages((prev) => [...prev, botMsg])
-      await supabase.from("messages").insert([
-        { text: trimmed, sender: "user" },
-        { text: reply, sender: "bot" },
-      ])
-    } catch (err) {
-      console.error("Send failed:", err)
+      if (data.reply) {
+        const botMsg: Message = {
+          id: crypto.randomUUID(),
+          text: data.reply,
+          sender: "bot",
+          created_at: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, botMsg])
+
+        await supabase.from("messages").insert([
+          { text: trimmed, sender: "user" },
+          { text: data.reply, sender: "bot" },
+        ])
+      }
+    } catch (error) {
+      console.error("Send message failed:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleIterate = async (type: string) => {
+    setIsLoading(true)
+
+    try {
+      const res = await fetch("http://localhost:5001/iterate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      })
+
+      const data = await res.json()
+
+      if (data.generated_code) {
+        setGeneratedCode(data.generated_code)
+        setView("code")
+      }
+
+      const textOnly = data.pm_reply || data.swe_reply
+      if (textOnly && !data.generated_code) {
+        const botMsg: Message = {
+          id: crypto.randomUUID(),
+          text: textOnly,
+          sender: "bot",
+          created_at: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, botMsg])
+        await supabase.from("messages").insert([{ text: textOnly, sender: "bot" }])
+      }
+    } catch (error) {
+      console.error("Iteration failed:", error)
     } finally {
       setIsLoading(false)
     }
