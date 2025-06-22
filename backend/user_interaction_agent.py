@@ -7,6 +7,7 @@ import os
 # Load environment variables
 load_dotenv()
 letta_api_key = os.getenv('LETTA_API_KEY')
+print("Letta API Key:", letta_api_key)  # Debugging line to check if the key is loaded
 client = Letta(token=letta_api_key)
 
 # ------------------ Letta Agent Setup ------------------

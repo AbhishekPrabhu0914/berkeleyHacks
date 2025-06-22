@@ -10,40 +10,19 @@ load_dotenv()
 letta_api_key = os.getenv("LETTA_API_KEY")
 client = Letta(token=letta_api_key)
 
-# ------------------ Create Agents Once ------------------
-pm_agent = client.agents.create(
-    model="openai/gpt-4.1",
-    embedding="openai/text-embedding-3-small",
-    memory_blocks=[
-        {
-            "label": "persona",
-            "value": "My name is PM. I gather info from non-technical users and write instructions for SWE AI."
-        },
-        {
-            "label": "persona",
-            "value": "I'm tough on the SWE agent to get results, but helpful to the user."
-        },
-    ],
-    tools=["web_search", "run_code"]
-)
+# ------------------ Load Persistent Agent IDs ------------------
 
-swe_agent = client.agents.create(
-    model="openai/gpt-4.1",
-    embedding="openai/text-embedding-3-small",
-    memory_blocks=[
-        {
-            "label": "persona",
-            "value": "My name is SWE. I turn PM instructions into production-grade code."
-        },
-        {
-            "label": "persona",
-            "value": "I’m precise, modular, and raise flags when PM instructions are ambiguous."
-        },
-    ],
-    tools=["web_search", "run_code"]
-)
+pm_agent_id = os.getenv("PM_AGENT_ID")
+swe_agent_id = os.getenv("SWE_AGENT_ID")
+
+if not pm_agent_id or not swe_agent_id:
+    raise ValueError("PM_AGENT_ID or SWE_AGENT_ID missing from .env")
+
+pm_agent = client.agents.retrieve(pm_agent_id)
+swe_agent = client.agents.retrieve(swe_agent_id)
 
 # ------------------ Flask Setup ------------------
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -59,28 +38,25 @@ PM_REQUIRED_SECTIONS = [
     "Deployment Preferences",
 ]
 
+last_pm_spec = ""
+
 # ------------------ Helper Functions ------------------
 
 def send_to_agent(agent_id: str, message: str) -> str:
     try:
-        print(f"\n🚀️  Sending to agent: {agent_id}")
-        print(f"📨 Message: {message}\n")
-
+        print(f"\n🚀 Sending to agent: {agent_id}")
+        print(f"📨 Message:\n{message}\n")
         result = client.agents.messages.create(
             agent_id=agent_id,
             messages=[{"role": "user", "content": message}]
         )
-
-        print("📬 Raw response from Letta:", result)
-
         for msg in result.messages:
             if msg.message_type == "assistant_message":
                 return msg.content
         return "No assistant message found."
     except Exception as e:
-        print("❌ Error while sending to agent:", e)
         traceback.print_exc()
-        raise
+        return f"❌ Agent Error: {e}"
 
 def check_requirements_complete(requirements: str) -> list:
     checklist = ", ".join(PM_REQUIRED_SECTIONS)
@@ -92,7 +68,7 @@ You are a helpful product manager. A user provided these product requirements:
 Check whether the following sections are clearly described:
 {checklist}
 
-List any that are missing, or reply \"None\" if all are present.
+List any that are missing, or reply "None" if all are present.
 Only return section names, separated by commas.
 """
     result = send_to_agent(pm_agent.id, prompt).strip()
@@ -117,8 +93,7 @@ Draft a detailed and structured technical spec for an application. Do not repeat
 - Suggested component or module layout
 - Any technical architecture recommendations
 
-After the draft, ask the user for approval by replying with either 'Approved' or 'Not Approved'. If 'Not Approved', revise the spec and ask again.
-Once approved, notify the SWE agent to begin implementation.
+Do not ask for approval — assume approval and proceed.
 """
     return send_to_agent(pm_agent.id, prompt)
 
@@ -126,51 +101,74 @@ def swe_implement_code(pm_instructions: str) -> str:
     prompt = f"The PM agent said:\n{pm_instructions}\n\nWrite code or revise based on those instructions."
     return send_to_agent(swe_agent.id, prompt)
 
+def run_interaction_loop(spec: str) -> dict:
+    swe_code = swe_implement_code(spec)
+    round_num = 1
+    while True:
+        pm_feedback = send_to_agent(pm_agent.id, f"""
+You are reviewing the following code implementation based on the approved spec.
+
+Approved Spec:
+{spec}
+
+Code:
+{swe_code}
+
+Provide feedback, suggestions, or reply 'Approved' to finalize.
+""")
+        if any(keyword in pm_feedback.lower() for keyword in ["approved", "looks good", "satisfied", "final version", "complete", "ready to deploy"]):
+            return {
+                "status": "satisfied",
+                "rounds": round_num,
+                "final_code": swe_code,
+                "pm_feedback": pm_feedback
+            }
+        swe_code = send_to_agent(swe_agent.id, f"""
+Revise the code according to this PM feedback:
+
+{pm_feedback}
+
+Previous code:
+{swe_code}
+""")
+        round_num += 1
+
 # ------------------ Routes ------------------
 
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
+        global last_pm_spec
         data = request.get_json()
-        user_message = data.get("message")
+        user_message = data.get("message", "").strip()
 
         if not user_message:
             return jsonify({"error": "No message provided"}), 400
 
-        normalized = user_message.strip().lower()
-
-        # Handle approval
-        if normalized == "approved":
-            approval_ack = "Thank you for the approval. Notifying SWE to begin implementation."
-            swe_reply = swe_implement_code(approval_ack)
-            return jsonify({
-                "reply": approval_ack,
-                "swe_reply": swe_reply
-            })
-
-        # Handle rejection
-        if normalized == "not approved":
-            revision_prompt = "The previous spec was not approved. Please revise the technical specification and ask for approval again."
-            revised_spec = send_to_agent(pm_agent.id, revision_prompt)
-            return jsonify({
-                "reply": revised_spec
-            })
-
         missing_sections = check_requirements_complete(user_message)
         if missing_sections:
             clarification = generate_missing_sections_question(missing_sections)
-            return jsonify({
-                "reply": clarification,
-                "missing_sections": missing_sections
-            })
+            return jsonify({"reply": clarification, "missing_sections": missing_sections})
 
         pm_response = pm_create_instructions(user_message)
-        return jsonify({"reply": pm_response})
+        last_pm_spec = pm_response
+        gan_result = run_interaction_loop(pm_response)
+
+        return jsonify({
+            "status": gan_result["status"],
+            "rounds": gan_result["rounds"],
+            "reply": (
+                f"✅ PM approved the project after **{gan_result['rounds']} round(s)**.\n\n"
+                f"### Final Code:\n```python\n{gan_result['final_code']}\n```\n\n"
+                f"### PM Feedback:\n{gan_result['pm_feedback']}"
+            )
+        })
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route("/iterate", methods=["POST"])
 def iterate():
     try:
         data = request.get_json()
@@ -183,10 +181,7 @@ def iterate():
         pm_reply = pm_create_instructions(user_context)
         swe_reply = swe_implement_code(pm_reply)
 
-        return jsonify({
-            "pm_reply": pm_reply,
-            "swe_reply": swe_reply
-        })
+        return jsonify({"pm_reply": pm_reply, "swe_reply": swe_reply})
 
     except Exception as e:
         traceback.print_exc()
