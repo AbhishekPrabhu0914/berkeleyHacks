@@ -11,7 +11,7 @@ import styles from "./page.module.css"
 
 const supabase = createClient(
   "https://suqfupehkzxtpqqghpaq.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cWZ1cGVoa3p4dHBxcWdocGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1MzY3NjcsImV4cCI6MjA2NjExMjc2N30.Vt3iK170uwYfI7PwlA17S8lvhrcSCiuXpQVEo2XE2Z4",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cWZ1cGVoa3p4dHBxcWdocGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1MzY3NjcsImV4cCI6MjA2NjExMjc2N30.Vt3iK170uwYfI7PwlA17S8lvhrcSCiuXpQVEo2XE2Z4"
 )
 
 interface Message {
@@ -29,7 +29,6 @@ export default function Home() {
   const [view, setView] = useState<"chat" | "code">("chat")
   const [isLoading, setIsLoading] = useState(false)
 
-  // Session + Message Subscription
   useEffect(() => {
     const getUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -62,8 +61,6 @@ export default function Home() {
         )
 
       await channel.subscribe()
-
-      // Cleanup on unmount
       return () => {
         supabase.removeChannel(channel)
       }
@@ -71,7 +68,6 @@ export default function Home() {
 
     getUser()
     let cleanupFn: (() => void) | undefined
-
     setupMessages().then((cleanup) => {
       cleanupFn = cleanup
     })
@@ -188,6 +184,12 @@ export default function Home() {
 
   return (
     <div className={styles.appContainer}>
+      {isLoading && (
+        <div className={styles.loadingOverlay}>
+          <div className={styles.loadingSpinner}></div>
+          <p className={styles.loadingText}>TwinStack is thinking...</p>
+        </div>
+      )}
       <div className={styles.chatSection}>
         <ChatPanel
           messages={messages}

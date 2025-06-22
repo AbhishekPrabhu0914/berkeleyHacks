@@ -29,11 +29,12 @@ The user wants to build a web app with these requirements:
 {self.requirements}
 \"\"\"
 
-Please check whether the following sections are present or sufficiently described:
+Please check if enough of the sections are present to start building an app
 {', '.join(self.REQUIRED_SECTIONS)}
 
 List the sections that are missing or incomplete, or reply "None" if all are present.
 Only list missing section names separated by commas.
+Under No Circumstances should you generate any code, leave that all to the SWE_agent.
 """
         response = call_gemini(prompt).strip()
 

@@ -5,23 +5,24 @@ from dotenv import load_dotenv
 import os
 import traceback
 
-# ------------------ Load Env ------------------
+# ------------------ Load Environment ------------------
+
 load_dotenv()
 letta_api_key = os.getenv("LETTA_API_KEY")
-client = Letta(token=letta_api_key)
-
-# ------------------ Load Persistent Agent IDs ------------------
-
 pm_agent_id = os.getenv("PM_AGENT_ID")
 swe_agent_id = os.getenv("SWE_AGENT_ID")
 
-if not pm_agent_id or not swe_agent_id:
-    raise ValueError("PM_AGENT_ID or SWE_AGENT_ID missing from .env")
+if not letta_api_key:
+    raise ValueError("LETTA_API_KEY is missing in .env")
 
+if not pm_agent_id or not swe_agent_id:
+    raise ValueError("PM_AGENT_ID or SWE_AGENT_ID missing in .env")
+
+client = Letta(token=letta_api_key)
 pm_agent = client.agents.retrieve(pm_agent_id)
 swe_agent = client.agents.retrieve(swe_agent_id)
 
-# ------------------ Flask Setup ------------------
+# ------------------ Flask App ------------------
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -38,21 +39,17 @@ PM_REQUIRED_SECTIONS = [
     "Deployment Preferences",
 ]
 
-last_pm_spec = ""
-
 # ------------------ Helper Functions ------------------
 
 def send_to_agent(agent_id: str, message: str) -> str:
     try:
-        print(f"\n🚀 Sending to agent: {agent_id}")
-        print(f"📨 Message:\n{message}\n")
-        result = client.agents.messages.create(
+        response = client.agents.messages.create(
             agent_id=agent_id,
             messages=[{"role": "user", "content": message}]
         )
-        for msg in result.messages:
+        for msg in response.messages:
             if msg.message_type == "assistant_message":
-                return msg.content
+                return getattr(msg, "content", None) or getattr(msg, "text", "")
         return "No assistant message found."
     except Exception as e:
         traceback.print_exc()
@@ -74,8 +71,7 @@ Only return section names, separated by commas.
     result = send_to_agent(pm_agent.id, prompt).strip()
     if result.lower() in ["none", "all present", "all sections present"]:
         return []
-    else:
-        return [s.strip() for s in result.split(",") if s.strip()]
+    return [s.strip() for s in result.split(",") if s.strip()]
 
 def generate_missing_sections_question(missing_sections: list) -> str:
     return "To proceed, please provide more details on the following sections: " + ", ".join(missing_sections) + "."
@@ -98,12 +94,27 @@ Do not ask for approval — assume approval and proceed.
     return send_to_agent(pm_agent.id, prompt)
 
 def swe_implement_code(pm_instructions: str) -> str:
-    prompt = f"The PM agent said:\n{pm_instructions}\n\nWrite code or revise based on those instructions."
+    prompt = f"""
+You are a senior mobile engineer on a product team.
+
+The PM has finalized and approved the following technical spec. Your task is to immediately implement the described features in code.
+
+🛑 Do NOT ask questions.  
+🛑 Do NOT summarize or explain.  
+✅ Only return valid, production-ready code for a React Native app.  
+✅ Wrap your response in code blocks and assume it's being pasted into a real repo.
+
+---
+
+PM Spec:
+\"\"\"{pm_instructions}\"\"\"
+"""
     return send_to_agent(swe_agent.id, prompt)
 
 def run_interaction_loop(spec: str) -> dict:
     swe_code = swe_implement_code(spec)
     round_num = 1
+
     while True:
         pm_feedback = send_to_agent(pm_agent.id, f"""
 You are reviewing the following code implementation based on the approved spec.
@@ -116,13 +127,17 @@ Code:
 
 Provide feedback, suggestions, or reply 'Approved' to finalize.
 """)
-        if any(keyword in pm_feedback.lower() for keyword in ["approved", "looks good", "satisfied", "final version", "complete", "ready to deploy"]):
+
+        if any(keyword in pm_feedback.lower() for keyword in [
+            "approved", "looks good", "satisfied", "final version", "complete", "ready to deploy"
+        ]):
             return {
                 "status": "satisfied",
                 "rounds": round_num,
                 "final_code": swe_code,
                 "pm_feedback": pm_feedback
             }
+
         swe_code = send_to_agent(swe_agent.id, f"""
 Revise the code according to this PM feedback:
 
@@ -138,7 +153,6 @@ Previous code:
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        global last_pm_spec
         data = request.get_json()
         user_message = data.get("message", "").strip()
 
@@ -151,17 +165,13 @@ def chat():
             return jsonify({"reply": clarification, "missing_sections": missing_sections})
 
         pm_response = pm_create_instructions(user_message)
-        last_pm_spec = pm_response
         gan_result = run_interaction_loop(pm_response)
 
         return jsonify({
             "status": gan_result["status"],
             "rounds": gan_result["rounds"],
-            "reply": (
-                f"✅ PM approved the project after **{gan_result['rounds']} round(s)**.\n\n"
-                f"### Final Code:\n```python\n{gan_result['final_code']}\n```\n\n"
-                f"### PM Feedback:\n{gan_result['pm_feedback']}"
-            )
+            "generated_code": gan_result["final_code"],
+            "pm_feedback": gan_result["pm_feedback"]
         })
 
     except Exception as e:
@@ -181,7 +191,10 @@ def iterate():
         pm_reply = pm_create_instructions(user_context)
         swe_reply = swe_implement_code(pm_reply)
 
-        return jsonify({"pm_reply": pm_reply, "swe_reply": swe_reply})
+        return jsonify({
+            "pm_reply": pm_reply,
+            "generated_code": swe_reply
+        })
 
     except Exception as e:
         traceback.print_exc()
