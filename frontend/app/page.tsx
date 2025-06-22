@@ -21,10 +21,6 @@ interface Message {
   created_at: string
 }
 
-/**
- * Main application component with authentication and chat functionality
- * Manages state for user session, messages, and UI interactions
- */
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [message, setMessage] = useState("")
@@ -33,7 +29,7 @@ export default function Home() {
   const [view, setView] = useState<"chat" | "code">("chat")
   const [isLoading, setIsLoading] = useState(false)
 
-  // Initialize user session and message subscription
+  // Session + Message Subscription
   useEffect(() => {
     const getUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -47,19 +43,42 @@ export default function Home() {
       }
     }
 
-    const subscribeToMessages = async () => {
-      const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: true })
+    const setupMessages = async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .order("created_at", { ascending: true })
       setMessages(data || [])
-      supabase
+
+      const channel = supabase
         .channel("public:messages")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message])
-        })
-        .subscribe()
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages" },
+          (payload) => {
+            const newMsg = payload.new as Message
+            setMessages((prev) => [...prev, newMsg])
+          }
+        )
+
+      await channel.subscribe()
+
+      // Cleanup on unmount
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
 
     getUser()
-    subscribeToMessages()
+    let cleanupFn: (() => void) | undefined
+
+    setupMessages().then((cleanup) => {
+      cleanupFn = cleanup
+    })
+
+    return () => {
+      if (cleanupFn) cleanupFn()
+    }
   }, [])
 
   const handleSignIn = async () => {
@@ -80,15 +99,16 @@ export default function Home() {
         body: JSON.stringify({ type }),
       })
       const data = await res.json()
-      const reply = data.reply || `No reply for ${type}`
+      const reply = data.swe_reply || data.reply || `No reply for ${type}`
+
       const botMsg: Message = {
         id: crypto.randomUUID(),
         text: reply,
         sender: "bot",
         created_at: new Date().toISOString(),
       }
-      setMessages((prev) => [...prev, botMsg])
 
+      setMessages((prev) => [...prev, botMsg])
       if (type === "example" || type === "code") {
         setGeneratedCode(reply)
         setView("code")
@@ -112,6 +132,7 @@ export default function Home() {
       sender: "user",
       created_at: new Date().toISOString(),
     }
+
     setMessages((prev) => [...prev, userMsg])
     setMessage("")
     setIsLoading(true)
@@ -124,12 +145,14 @@ export default function Home() {
       })
       const data = await res.json()
       const reply = data.reply || "No reply"
+
       const botMsg: Message = {
         id: crypto.randomUUID(),
         text: reply,
         sender: "bot",
         created_at: new Date().toISOString(),
       }
+
       setMessages((prev) => [...prev, botMsg])
       await supabase.from("messages").insert([
         { text: trimmed, sender: "user" },
@@ -142,7 +165,6 @@ export default function Home() {
     }
   }
 
-  // Show authentication screen if user is not signed in
   if (!user) {
     return (
       <div className={styles.authContainer}>
@@ -164,7 +186,6 @@ export default function Home() {
     )
   }
 
-  // Main application interface
   return (
     <div className={styles.appContainer}>
       <div className={styles.chatSection}>

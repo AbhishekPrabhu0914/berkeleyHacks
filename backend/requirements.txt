@@ -1,3 +1,6 @@
+google-genai==1.12.1
+python-dotenv
+supabase
 letta
 flask
 flask-cors
