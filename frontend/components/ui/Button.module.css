@@ -1,0 +1,91 @@
+/* Base button styles with smooth transitions and modern design */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* Size variants */
+.sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+}
+
+.md {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+}
+
+.lg {
+  padding: 1rem 2rem;
+  font-size: 1rem;
+}
+
+/* Color variants with soft, professional palette */
+.primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.primary:not(:disabled):hover {
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
+.secondary {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
+.secondary:not(:disabled):hover {
+  box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
+}
+
+.accent {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+.accent:not(:disabled):hover {
+  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.4);
+}
+
+.ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.ghost:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
