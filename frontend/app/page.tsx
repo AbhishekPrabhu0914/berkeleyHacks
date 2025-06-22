@@ -43,41 +43,34 @@ export default function Home() {
       }
     }
 
-    const setupMessages = async () => {
+    // Create channel once
+    const channel = supabase.channel("public:messages")
+
+    const subscribeToMessages = async () => {
       const { data } = await supabase
         .from("messages")
         .select("*")
         .order("created_at", { ascending: true })
       setMessages(data || [])
 
-      const channel = supabase
-        .channel("public:messages")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages" },
-          (payload) => {
-            const newMsg = payload.new as Message
-            setMessages((prev) => [...prev, newMsg])
-          }
-        )
+      channel.on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const newMsg = payload.new as Message
+          setMessages((prev) => [...prev, newMsg])
+        }
+      )
 
       await channel.subscribe()
-
-      // Cleanup on unmount
-      return () => {
-        supabase.removeChannel(channel)
-      }
     }
 
     getUser()
-    let cleanupFn: (() => void) | undefined
+    subscribeToMessages()
 
-    setupMessages().then((cleanup) => {
-      cleanupFn = cleanup
-    })
-
+    // Cleanup subscription on unmount
     return () => {
-      if (cleanupFn) cleanupFn()
+      supabase.removeChannel(channel)
     }
   }, [])
 
